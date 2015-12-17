@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import emcee
-
+import batman
 
 def _gaus(x, a, b, x0, sigma):
     """
