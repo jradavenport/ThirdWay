@@ -2,12 +2,13 @@
 from __future__ import absolute_import, print_function
 import numpy as np
 import emcee
-from .lightcurve import params
 from scipy import optimize, signal
 import matplotlib.pyplot as plt
 
+
 def gaussian(times, amplitude, t0, sigma):
     return amplitude * np.exp(-0.5*(times - t0)**2/sigma**2)
+
 
 def summed_gaussians(times, input_parameters):
     """
@@ -40,7 +41,7 @@ def summed_gaussians(times, input_parameters):
 #     return p
 
 
-def get_in_transit_bounds(x, params=params, duration_fraction=0.7):
+def get_in_transit_bounds(x, params, duration_fraction=0.7):
     phased = (x - params.t0) % params.per
     near_transit = ((phased < params.duration*(0.5*duration_fraction)) |
                     (phased > params.per - params.duration*(0.5*duration_fraction)))
@@ -83,6 +84,7 @@ def lnprior(theta, y, lower_t_bound, upper_t_bound):
 #                                     args=(times, residuals, errors), approx_grad=True)
 #    return results
 
+
 def lnlike(theta, x, y, yerr):
     model = summed_gaussians(x, theta)
     return -0.5*np.sum((y-model)**2/yerr**2)
@@ -95,11 +97,11 @@ def lnprob(theta, x, y, yerr, lower_t_bound, upper_t_bound):
     return lp + lnlike(theta, x, y, yerr)
 
 
-def run_emcee(times, residuals, errors, n_peaks=4, burnin=0.7):
+def run_emcee(times, residuals, errors, params, n_peaks=4, burnin=0.7):
 
     # Create n_peaks evenly spaced peaks throught residuals:
 
-    lower_t_bound, upper_t_bound = get_in_transit_bounds(times)
+    lower_t_bound, upper_t_bound = get_in_transit_bounds(times, params)
 
     peak_times = np.linspace(lower_t_bound, upper_t_bound, n_peaks+2)[1:-1]
     peak_amplitudes = n_peaks*[4*np.std(residuals)]
@@ -131,20 +133,20 @@ def chi2(theta, x, y, yerr):
     model = summed_gaussians(x, theta)
     return np.sum((y-model)**2/yerr**2)
 
-def peak_finder(times, residuals, errors, n_peaks=4, plots=False, verbose=False):
+
+def peak_finder(times, residuals, errors, params, n_peaks=4, plots=False, verbose=False):
     # http://stackoverflow.com/a/25666951
     # Convolve residuals with a gaussian, find relative maxima
     n_points_kernel = 100
     window = signal.general_gaussian(n_points_kernel+1, p=1, sig=12)
     filtered = signal.fftconvolve(window, residuals)
     filtered = (np.average(residuals) / np.average(filtered)) * filtered
-    filtered = np.roll(filtered, -n_points_kernel/2)
+    filtered = np.roll(filtered, int(-n_points_kernel/2))
     maxes = signal.argrelmax(filtered)[0]
     maxes = maxes[maxes < len(residuals)]
     maxes = maxes[residuals[maxes] > 0]
 
-
-    lower_t_bound, upper_t_bound = get_in_transit_bounds(times)
+    lower_t_bound, upper_t_bound = get_in_transit_bounds(times, params)
     maxes_in_transit = maxes[(times[maxes] < upper_t_bound) & 
                              (times[maxes] > lower_t_bound)]
 
@@ -157,8 +159,8 @@ def peak_finder(times, residuals, errors, n_peaks=4, plots=False, verbose=False)
     peak_amplitudes = residuals[maxes_in_transit]#len(peak_times)*[3*np.std(residuals)]
     peak_sigmas = len(peak_times)*[4./60/24] # 5 min
     input_parameters = np.vstack([peak_amplitudes, peak_times, peak_sigmas]).T.ravel()
-    #result = optimize.fmin(chi2, input_parameters, args=(times, residuals, errors))
-    result = optimize.fmin_bfgs(chi2, input_parameters, disp=False, 
+    # result = optimize.fmin(chi2, input_parameters, args=(times, residuals, errors))
+    result = optimize.fmin_bfgs(chi2, input_parameters, disp=False,
                                 args=(times, residuals, errors))        
     #print(result, result == input_parameters)
     

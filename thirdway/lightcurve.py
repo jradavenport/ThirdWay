@@ -86,10 +86,7 @@ def T14b_to_aRsi(P, T14, b, RpRs, eccentricity, omega):
     aRs = b/np.cos(i)
     return aRs, np.degrees(i)
 
-# Set transit parameter defaults to the Kepler-17 values from jrad
-params = kepler17_params_db()
-
-def generate_lc_depth(times, depth, init_params=params):
+def generate_lc_depth(times, depth, init_params):
     exp_time = (1*u.min).to(u.day).value
 
     init_params.rp = np.sqrt(depth)
@@ -123,9 +120,8 @@ class LightCurve(object):
         self.quarters = quarters
         self.name = name
 
-    def plot(self, ax=None, quarter=None, show=True, phase=False,
-             plot_kwargs={'color':'b', 'marker':'o', 'lw':0},
-             params=params):
+    def plot(self, params, ax=None, quarter=None, show=True, phase=False,
+             plot_kwargs={'color':'b', 'marker':'o', 'lw':0}):
         """
         Plot light curve
         """
@@ -254,7 +250,7 @@ class LightCurve(object):
         if rename is not None:
             self.name = rename
 
-    def mask_out_of_transit(self, params=params, oot_duration_fraction=0.25, flip=False):
+    def mask_out_of_transit(self, params, oot_duration_fraction=0.25, flip=False):
         """
         Mask out the out-of-transit light curve based on transit parameters
         """
@@ -271,11 +267,11 @@ class LightCurve(object):
                     errors=self.errors[near_transit][sort_by_time],
                     quarters=self.quarters[near_transit][sort_by_time])
 
-    def mask_in_transit(self, params=params, oot_duration_fraction=0.25):
-        return self.mask_out_of_transit(params=params, oot_duration_fraction=oot_duration_fraction,
+    def mask_in_transit(self, params, oot_duration_fraction=0.25):
+        return self.mask_out_of_transit(params, oot_duration_fraction=oot_duration_fraction,
                                         flip=True)
 
-    def get_transit_light_curves(self, params=params, plots=False):
+    def get_transit_light_curves(self, params, plots=False):
         """
         For a light curve with transits only (returned by get_only_transits),
         split up the transits into their own light curves, return a list of
@@ -370,7 +366,7 @@ class TransitLightCurve(LightCurve):
         self.name = name
         self.rescaled = False
 
-    def fit_linear_baseline(self, cadence=1*u.min, return_near_transit=False,
+    def fit_linear_baseline(self, params, cadence=1*u.min, return_near_transit=False,
                             plots=False):
         """
         Find OOT portions of transit light curve using similar method to
@@ -400,14 +396,14 @@ class TransitLightCurve(LightCurve):
         else:
             return linear_baseline
 
-    def remove_linear_baseline(self, plots=False, cadence=1*u.min):
+    def remove_linear_baseline(self, params, plots=False, cadence=1*u.min):
         """
         Find OOT portions of transit light curve using similar method to
         `LightCurve.mask_out_of_transit`, fit linear baseline to OOT,
         divide whole light curve by that fit.
         """
 
-        linear_baseline, near_transit = self.fit_linear_baseline(cadence=cadence,
+        linear_baseline, near_transit = self.fit_linear_baseline(params, cadence=cadence,
                                                                  return_near_transit=True)
         linear_baseline_fit = np.polyval(linear_baseline, self.times.jd)
         self.fluxes =  self.fluxes/linear_baseline_fit
@@ -432,8 +428,8 @@ class TransitLightCurve(LightCurve):
             self.errors *= scaling_vector
             self.rescaled = True
 
-    def fiducial_transit_fit(self, plots=False,
-                             model=generate_lc_depth, params=params):
+    def fiducial_transit_fit(self, params, plots=False,
+                             model=generate_lc_depth):
         # Determine cadence:
         # typical_time_diff = np.median(np.diff(self.times.jd))*u.day
         # exp_long = 30*u.min
